@@ -235,11 +235,11 @@ const styles = StyleSheet.create({
     color: '#aaaaaa',
   },
   disabledButton: {
-    borderColor: '#666',
+    borderColor: '#667',
     opacity: 0.5,
   },
   disabledText: {
-    color: '#666',
+    color: '#667',
   },
   dangerButton: {
     borderColor: '#ff6b6b',
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
   },
   appInfoText: {
     fontSize: 12,
-    color: '#666',
+    color: '#667',
     marginBottom: 5,
   },
 });

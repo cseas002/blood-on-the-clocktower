@@ -1,9 +1,12 @@
-import { StyleSheet, View, ScrollView, TouchableOpacity, Text, TextInput, Modal, Pressable, Alert } from "react-native";
+import { StyleSheet, View, ScrollView, TouchableOpacity, Text, TextInput, Modal, Pressable, Alert, Dimensions, Image } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { useGame } from "../../context/GameContext";
 import { Player } from "../../types/game";
+import { TEAM_COLORS } from "../../constants/Colors";
+
+const { width, height } = Dimensions.get('window');
 
 export default function GrimoireScreen() {
   const router = useRouter();
@@ -48,6 +51,21 @@ export default function GrimoireScreen() {
     }
   };
 
+  // Calculate position for tokens in a circle
+  const getCirclePosition = (index: number, total: number) => {
+    const radius = Math.min(width, height - 300) * 0.35; // Circle radius
+    const centerX = width / 2;
+    const centerY = (height - 200) / 2; // Adjusted for header and stats
+
+    // Start from top (270 degrees) and go clockwise
+    const angle = (270 + (360 / total) * index) * (Math.PI / 180);
+
+    return {
+      left: centerX + radius * Math.cos(angle) - 50, // -50 to center the token (token width/2)
+      top: centerY + radius * Math.sin(angle) - 50, // -50 to center the token (token height/2)
+    };
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
@@ -55,56 +73,114 @@ export default function GrimoireScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Grimoire</Text>
-        <Text style={styles.subtitle}>Storyteller's Board</Text>
+        <Text style={styles.subtitle}>Storyteller&apos;s Board</Text>
       </View>
 
-      {/* Player Count */}
-      <View style={styles.playerCount}>
-        <Text style={styles.playerCountText}>
-          Players: {gameState.players.length}
-        </Text>
-        <Text style={styles.aliveCountText}>
-          Alive: {gameState.players.filter(p => !p.isDead).length}
-        </Text>
+      {/* Game Stats */}
+      <View style={styles.statsSection}>
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Players</Text>
+          <Text style={styles.statValue}>{gameState.players.length}/{gameState.selectedCharacters.length}</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Alive</Text>
+          <Text style={styles.statValue}>{gameState.players.filter(p => !p.isDead).length}</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Characters</Text>
+          <Text style={styles.statValue}>{gameState.selectedCharacters.length}</Text>
+        </View>
       </View>
 
-      {/* Grimoire Board */}
+      {/* Grimoire Board - Show characters with assigned players */}
       <ScrollView style={styles.grimoire} contentContainerStyle={styles.grimoireContent}>
-        {gameState.players.length === 0 ? (
+        {gameState.selectedCharacters.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No players yet</Text>
-            <Text style={styles.emptyStateSubtext}>Tap the + button to add players</Text>
+            <Text style={styles.emptyStateText}>No characters selected</Text>
+            <Text style={styles.emptyStateSubtext}>Set up your game first</Text>
           </View>
         ) : (
-          <View style={styles.playerGrid}>
-            {gameState.players.map((player) => (
-              <TouchableOpacity
-                key={player.id}
-                style={[
-                  styles.playerToken,
-                  player.isDead && styles.playerTokenDead
-                ]}
-                onPress={() => handlePlayerPress(player)}
-                onLongPress={() => handleRemovePlayer(player.id)}
-              >
-                <View style={styles.playerTokenContent}>
-                  <Text style={styles.playerName}>{player.name}</Text>
-                  {player.character && (
-                    <Text style={styles.characterName}>{player.character.name}</Text>
-                  )}
-                  {player.reminders.length > 0 && (
-                    <View style={styles.reminderBadge}>
-                      <Text style={styles.reminderBadgeText}>{player.reminders.length}</Text>
+          <View style={styles.circleContainer}>
+            {gameState.selectedCharacters.map((character, index) => {
+              const assignedPlayer = gameState.players.find(p => p.character?.id === character.id);
+
+              // Check if this character is being impersonated by a drunk
+              const isImpersonatedByDrunk = Object.values(gameState.drunkImpersonations).some(impersonated =>
+                impersonated.id === character.id
+              );
+
+              // Check if this character is the drunk
+              const isDrunk = character.id === 'drunk';
+              const drunkImpersonation = isDrunk ? gameState.drunkImpersonations[character.id] : null;
+
+              // Determine if this character should have a remove button
+              const shouldShowRemoveButton = !isImpersonatedByDrunk && assignedPlayer;
+
+              const position = getCirclePosition(index, gameState.selectedCharacters.length);
+
+              return (
+                <View
+                  key={character.id}
+                  style={[
+                    styles.tokenWrapper,
+                    {
+                      position: 'absolute',
+                      ...position
+                    }
+                  ]}
+                >
+                  {/* Player number badge */}
+                  {assignedPlayer && (
+                    <View style={[
+                      styles.playerNumberBadge,
+                      { backgroundColor: assignedPlayer.isDead ? '#666' : '#3b82f6' }
+                    ]}>
+                      <Text style={styles.playerNumberText}>{index + 1}</Text>
                     </View>
                   )}
+
+                  <TouchableOpacity
+                    style={[
+                      styles.characterToken,
+                      {
+                        borderColor: TEAM_COLORS[character.team],
+                        backgroundColor: assignedPlayer ? '#f5f5dc' : '#2d2d2d',
+                      },
+                      assignedPlayer?.isDead && styles.characterTokenDead
+                    ]}
+                    onPress={() => assignedPlayer && handlePlayerPress(assignedPlayer)}
+                    onLongPress={() => shouldShowRemoveButton && handleRemovePlayer(assignedPlayer.id)}
+                  >
+                    {/* Character icon */}
+                    <Image
+                      source={character.icon}
+                      style={styles.characterIcon}
+                      resizeMode="contain"
+                    />
+
+                    {/* Player name overlay */}
+                    {assignedPlayer && (
+                      <View style={styles.playerNameOverlay}>
+                        <Text style={styles.playerName} numberOfLines={1}>
+                          {assignedPlayer.name}
+                        </Text>
+                      </View>
+                    )}
+
+                    {assignedPlayer?.isDead && (
+                      <View style={styles.deathOverlay}>
+                        <Text style={styles.deathText}>✕</Text>
+                      </View>
+                    )}
+                    {assignedPlayer?.reminders && assignedPlayer.reminders.length > 0 && (
+                      <View style={styles.reminderBadge}>
+                        <Text style={styles.reminderBadgeText}>{assignedPlayer.reminders.length}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
                 </View>
-                {player.isDead && (
-                  <View style={styles.deathOverlay}>
-                    <Text style={styles.deathText}>☠</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
+              );
+            })}
           </View>
         )}
       </ScrollView>
@@ -200,7 +276,7 @@ export default function GrimoireScreen() {
                     style={[styles.button, styles.assignButton]}
                     onPress={() => {
                       router.push({
-                        pathname: "/storyteller/assign-character",
+                        pathname: "/assign-character",
                         params: { playerId: selectedPlayer.id }
                       });
                       setSelectedPlayer(null);
@@ -288,13 +364,13 @@ export default function GrimoireScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#000000',
   },
   header: {
     paddingTop: 60,
     paddingBottom: 20,
     paddingHorizontal: 20,
-    backgroundColor: '#16213e',
+    backgroundColor: '#2d2d2d',
     borderBottomWidth: 2,
     borderBottomColor: '#e94560',
   },
@@ -310,21 +386,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 5,
   },
-  playerCount: {
+  statsSection: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     padding: 15,
-    backgroundColor: '#0f3460',
+    backgroundColor: '#1d1d1d',
   },
-  playerCountText: {
+  statItem: {
+    alignItems: 'center',
+  },
+  statLabel: {
+    color: '#cccccc',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 5,
+  },
+  statValue: {
     color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  aliveCountText: {
-    color: '#4ecca3',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   grimoire: {
     flex: 1,
@@ -332,6 +412,7 @@ const styles = StyleSheet.create({
   grimoireContent: {
     padding: 20,
     paddingBottom: 100,
+    minHeight: height - 200,
   },
   emptyState: {
     alignItems: 'center',
@@ -345,59 +426,122 @@ const styles = StyleSheet.create({
   },
   emptyStateSubtext: {
     fontSize: 14,
-    color: '#666',
+    color: '#667',
   },
-  playerGrid: {
+  circleContainer: {
+    width: width,
+    height: height - 200,
+    position: 'relative',
+  },
+  tokenWrapper: {
+    width: 100,
+    height: 100,
+  },
+  playerNumberBadge: {
+    position: 'absolute',
+    top: -10,
+    left: '50%',
+    marginLeft: -15,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  playerNumberText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  characterGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-around',
     gap: 15,
   },
-  playerToken: {
+  characterToken: {
     width: 100,
     height: 100,
-    backgroundColor: '#16213e',
+    backgroundColor: '#2d2d2d',
     borderRadius: 50,
-    borderWidth: 3,
-    borderColor: '#e94560',
+    borderWidth: 4,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 10,
+    overflow: 'hidden',
     position: 'relative',
   },
-  playerTokenDead: {
-    borderColor: '#666',
+  characterIcon: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+  },
+  playerNameOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingVertical: 3,
+    paddingHorizontal: 4,
+  },
+  characterTokenDead: {
     opacity: 0.6,
   },
-  playerTokenContent: {
+  characterTokenContent: {
     alignItems: 'center',
+    width: '100%',
+  },
+  characterName: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 4,
+    lineHeight: 12,
   },
   playerName: {
     color: '#ffffff',
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 8,
+    fontWeight: '700',
     textAlign: 'center',
   },
-  characterName: {
-    color: '#e94560',
-    fontSize: 10,
-    marginTop: 4,
+  unassignedText: {
+    color: '#999999',
+    fontSize: 12,
+    fontStyle: 'italic',
     textAlign: 'center',
+  },
+  drunkNote: {
+    color: '#ffa502',
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  drunkThinks: {
+    color: '#4ecca3',
+    fontSize: 10,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 2,
   },
   reminderBadge: {
     position: 'absolute',
-    top: -30,
-    right: -30,
-    backgroundColor: '#4ecca3',
+    top: 5,
+    right: 5,
+    backgroundColor: '#ffa502',
     borderRadius: 10,
     width: 20,
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
   reminderBadgeText: {
-    color: '#000',
-    fontSize: 12,
+    color: '#fff',
+    fontSize: 10,
     fontWeight: 'bold',
   },
   deathOverlay: {
@@ -406,14 +550,15 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0)',
     borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
   },
   deathText: {
-    fontSize: 40,
-    color: '#ffffff',
+    fontSize: 60,
+    color: '#e94560',
+    fontWeight: 'bold',
   },
   addButton: {
     position: 'absolute',
@@ -438,12 +583,12 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#16213e',
+    backgroundColor: '#2d2d2d',
     borderRadius: 20,
     padding: 30,
     width: '80%',
@@ -457,7 +602,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   input: {
-    backgroundColor: '#0f3460',
+    backgroundColor: '#3d3d3d',
     borderRadius: 10,
     padding: 15,
     fontSize: 16,
@@ -476,13 +621,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: '#666',
+    backgroundColor: '#667',
   },
   addButtonModal: {
     backgroundColor: '#e94560',
   },
   deadButton: {
-    backgroundColor: '#666',
+    backgroundColor: '#667',
   },
   aliveButton: {
     backgroundColor: '#4ecca3',
@@ -501,7 +646,7 @@ const styles = StyleSheet.create({
   remindersSection: {
     marginVertical: 15,
     padding: 15,
-    backgroundColor: '#0f3460',
+    backgroundColor: '#1d1d1d',
     borderRadius: 10,
   },
   remindersSectionTitle: {
@@ -516,7 +661,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 10,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#000000',
     borderRadius: 5,
     marginBottom: 5,
   },

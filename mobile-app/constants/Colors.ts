@@ -1,49 +1,49 @@
-// Blood on the Clocktower Theme Colors
+// Blood on the Clocktower Theme Colors - Inspired by bloodontheclocktower.com
 export const Colors = {
-  // Main Background - Deep Purple/Black
-  background: '#0a0a0f',
-  backgroundLight: '#1a1a2e',
+  // Main Background - Dark theme similar to website
+  background: '#000000',
+  backgroundLight: '#1a1a1a',
 
-  // Card/Surface Colors - Dark Purple Tones
-  surface: '#1e1835',
-  surfaceLight: '#2a2142',
-  surfaceDark: '#15111f',
+  // Card/Surface Colors - Dark grays
+  surface: '#2d2d2d',
+  surfaceLight: '#3d3d3d',
+  surfaceDark: '#1d1d1d',
 
-  // Primary - Purple
-  primary: '#6B46C1',
-  primaryLight: '#8B5CF6',
-  primaryDark: '#553C9A',
+  // Primary - Red accent (main theme color from website)
+  primary: '#e94560',
+  primaryLight: '#ff6b7a',
+  primaryDark: '#d63354',
 
-  // Accent - Gold/Amber for important elements
-  accent: '#D4AF37',
-  accentLight: '#F4D03F',
-  accentDark: '#B8960C',
+  // Accent - Lighter red for highlights
+  accent: '#ff4757',
+  accentLight: '#ff6b7a',
+  accentDark: '#e03344',
 
-  // Text Colors
-  text: '#E5E5E5',
-  textSecondary: '#A0A0B0',
-  textMuted: '#6B6B7B',
+  // Text Colors - White/light gray
+  text: '#ffffff',
+  textSecondary: '#cccccc',
+  textMuted: '#999999',
 
-  // Team Colors
-  townsfolk: '#5BA3D0',
-  outsider: '#E83D84',
-  minion: '#C65D57',
-  demon: '#8B1E1E',
-  traveler: '#9B7EBD',
+  // Team Colors - Adjusted for new theme
+  townsfolk: '#4a90e2', // Blue
+  outsider: '#e94b9c',  // Pink
+  minion: '#f39c12',    // Orange
+  demon: '#e74c3c',     // Red
+  traveler: '#9b59b6',  // Purple
 
   // Status Colors
-  success: '#4CAF50',
-  danger: '#E53935',
-  warning: '#FFA726',
-  info: '#42A5F5',
+  success: '#27ae60',
+  danger: '#e74c3c',
+  warning: '#f39c12',
+  info: '#3498db',
 
   // UI Elements
-  border: '#3a3350',
-  borderLight: '#4a4360',
-  disabled: '#505050',
+  border: '#404040',
+  borderLight: '#606060',
+  disabled: '#606060',
 
   // Overlay
-  overlay: 'rgba(10, 10, 15, 0.8)',
+  overlay: 'rgba(0, 0, 0, 0.8)',
 };
 
 export const TEAM_COLORS = {

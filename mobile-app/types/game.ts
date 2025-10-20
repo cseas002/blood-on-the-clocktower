@@ -29,6 +29,7 @@ export interface Player {
   hasUsedDeadVote: boolean;
   reminders: Reminder[];
   notes: string;
+  drunkImpersonation?: Character; // For drunk characters, which townsfolk they think they are
 }
 
 export interface Reminder {
@@ -43,4 +44,13 @@ export interface GameState {
   demonBluffs: Character[];
   isNight: boolean;
   currentNightStep: number;
+  selectedCharacters: Character[];
+  playerCount: number;
+  characterDistribution: {
+    townsfolk: number;
+    outsider: number;
+    minion: number;
+    demon: number;
+  };
+  drunkImpersonations: Record<string, Character>; // Maps drunk character IDs to the townsfolk they impersonate
 }

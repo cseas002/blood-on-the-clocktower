@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Colors } from '../../constants/Colors';
+import { Text, StyleSheet } from 'react-native';
 
 export default function TabsLayout() {
   return (
@@ -10,16 +11,22 @@ export default function TabsLayout() {
           backgroundColor: Colors.surface,
           borderTopColor: Colors.primary,
           borderTopWidth: 2,
-          height: 60,
+          height: 70,
           paddingBottom: 8,
           paddingTop: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -1 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 8,
         },
-        tabBarIconStyle: { display: "none" },
-        tabBarActiveTintColor: Colors.accent,
+        tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
+        tabBarShowLabel: true,
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: '600',
+          marginTop: 2,
         },
       }}
     >
@@ -27,30 +34,52 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Grimoire',
-          tabBarLabel: '🏠 Grimoire',
+          tabBarIcon: ({ focused, color, size }) => (
+            <Text style={[styles.icon, { color, fontSize: size || 24 }]}>
+              🏠
+            </Text>
+          ),
         }}
       />
       <Tabs.Screen
         name="characters"
         options={{
           title: 'Characters',
-          tabBarLabel: '📖 Characters',
+          tabBarIcon: ({ focused, color, size }) => (
+            <Text style={[styles.icon, { color, fontSize: size || 24 }]}>
+              📖
+            </Text>
+          ),
         }}
       />
       <Tabs.Screen
         name="night-order"
         options={{
           title: 'Night Order',
-          tabBarLabel: '🌙 Night',
+          tabBarIcon: ({ focused, color, size }) => (
+            <Text style={[styles.icon, { color, fontSize: size || 24 }]}>
+              🌙
+            </Text>
+          ),
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
-          tabBarLabel: '⚙️ Settings',
+          tabBarIcon: ({ focused, color, size }) => (
+            <Text style={[styles.icon, { color, fontSize: size || 24 }]}>
+              ⚙️
+            </Text>
+          ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  icon: {
+    fontSize: 24,
+  },
+});

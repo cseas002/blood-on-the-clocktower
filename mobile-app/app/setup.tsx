@@ -2,6 +2,7 @@ import { StyleSheet, View, ScrollView, TouchableOpacity, Text } from "react-nati
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 import { useRouter } from "expo-router";
+import { useGame } from "../context/GameContext";
 import { Colors } from "../constants/Colors";
 import Slider from '@react-native-community/slider';
 
@@ -22,16 +23,20 @@ const CHARACTER_DISTRIBUTION: Record<number, { townsfolk: number; outsider: numb
 
 export default function SetupScreen() {
   const router = useRouter();
-  const [playerCount, setPlayerCount] = useState(7);
+  const { setPlayerCount } = useGame();
+  const [playerCount, setPlayerCountState] = useState(8);
 
-  const distribution = CHARACTER_DISTRIBUTION[playerCount] || CHARACTER_DISTRIBUTION[7];
+  const distribution = CHARACTER_DISTRIBUTION[playerCount] || CHARACTER_DISTRIBUTION[8];
 
   const handleStartGame = () => {
-    // Navigate to tabs (grimoire) and the grimoire will use this player count
-    router.push({
-      pathname: "/(tabs)",
-      params: { playerCount: playerCount.toString() }
-    });
+    // Set the player count in the game context and navigate to character selection
+    setPlayerCount(playerCount);
+    router.push("/character-selection");
+  };
+
+  const handlePlayerCountChange = (count: number) => {
+    setPlayerCountState(count);
+    setPlayerCount(count);
   };
 
   return (
@@ -154,7 +159,7 @@ export default function SetupScreen() {
               maximumValue={15}
               step={1}
               value={playerCount}
-              onValueChange={setPlayerCount}
+              onValueChange={handlePlayerCountChange}
               minimumTrackTintColor={Colors.primary}
               maximumTrackTintColor={Colors.border}
               thumbTintColor={Colors.accent}

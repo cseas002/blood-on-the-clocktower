@@ -1,16 +1,37 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, Dispatch, SetStateAction } from 'react';
 import { GameState, Player, Character, Reminder } from '../types/game';
+
+// Character distribution based on player count (Trouble Brewing)
+const CHARACTER_DISTRIBUTION: Record<number, { townsfolk: number; outsider: number; minion: number; demon: number }> = {
+  5: { townsfolk: 3, outsider: 0, minion: 1, demon: 1 },
+  6: { townsfolk: 3, outsider: 1, minion: 1, demon: 1 },
+  7: { townsfolk: 5, outsider: 0, minion: 1, demon: 1 },
+  8: { townsfolk: 5, outsider: 1, minion: 1, demon: 1 },
+  9: { townsfolk: 5, outsider: 2, minion: 1, demon: 1 },
+  10: { townsfolk: 7, outsider: 0, minion: 2, demon: 1 },
+  11: { townsfolk: 7, outsider: 1, minion: 2, demon: 1 },
+  12: { townsfolk: 7, outsider: 2, minion: 2, demon: 1 },
+  13: { townsfolk: 9, outsider: 0, minion: 3, demon: 1 },
+  14: { townsfolk: 9, outsider: 1, minion: 3, demon: 1 },
+  15: { townsfolk: 9, outsider: 2, minion: 3, demon: 1 },
+};
 
 interface GameContextType {
   gameState: GameState;
+  setGameState: React.Dispatch<React.SetStateAction<GameState>>;
   addPlayer: (name: string) => void;
   removePlayer: (playerId: string) => void;
   updatePlayer: (playerId: string, updates: Partial<Player>) => void;
-  assignCharacter: (playerId: string, character: Character) => void;
+  assignCharacter: (playerId: string, character: Character, drunkImpersonation?: Character) => void;
   togglePlayerDeath: (playerId: string) => void;
   addReminder: (playerId: string, reminder: Reminder) => void;
   removeReminder: (playerId: string, reminderId: string) => void;
   resetGame: () => void;
+  setPlayerCount: (count: number) => void;
+  addSelectedCharacter: (character: Character) => void;
+  removeSelectedCharacter: (characterId: string) => void;
+  clearSelectedCharacters: () => void;
+  setDrunkImpersonation: (drunkCharacterId: string, impersonatedCharacter: Character) => void;
 }
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -21,6 +42,15 @@ const initialGameState: GameState = {
   demonBluffs: [],
   isNight: false,
   currentNightStep: 0,
+  selectedCharacters: [],
+  playerCount: 7,
+  characterDistribution: {
+    townsfolk: 5,
+    outsider: 0,
+    minion: 1,
+    demon: 1,
+  },
+  drunkImpersonations: {},
 };
 
 export function GameProvider({ children }: { children: ReactNode }) {
@@ -58,8 +88,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }));
   };
 
-  const assignCharacter = (playerId: string, character: Character) => {
-    updatePlayer(playerId, { character });
+  const assignCharacter = (playerId: string, character: Character, drunkImpersonation?: Character) => {
+    updatePlayer(playerId, { character, drunkImpersonation });
   };
 
   const togglePlayerDeath = (playerId: string) => {
@@ -97,10 +127,52 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setGameState(initialGameState);
   };
 
+  const setPlayerCount = (count: number) => {
+    const distribution = CHARACTER_DISTRIBUTION[count] || CHARACTER_DISTRIBUTION[7];
+    setGameState(prev => ({
+      ...prev,
+      playerCount: count,
+      characterDistribution: distribution,
+    }));
+  };
+
+  const addSelectedCharacter = (character: Character) => {
+    setGameState(prev => ({
+      ...prev,
+      selectedCharacters: [...prev.selectedCharacters, character],
+    }));
+  };
+
+  const removeSelectedCharacter = (characterId: string) => {
+    setGameState(prev => ({
+      ...prev,
+      selectedCharacters: prev.selectedCharacters.filter(c => c.id !== characterId),
+    }));
+  };
+
+  const clearSelectedCharacters = () => {
+    setGameState(prev => ({
+      ...prev,
+      selectedCharacters: [],
+      drunkImpersonations: {},
+    }));
+  };
+
+  const setDrunkImpersonation = (drunkCharacterId: string, impersonatedCharacter: Character) => {
+    setGameState(prev => ({
+      ...prev,
+      drunkImpersonations: {
+        ...prev.drunkImpersonations,
+        [drunkCharacterId]: impersonatedCharacter,
+      },
+    }));
+  };
+
   return (
     <GameContext.Provider
       value={{
         gameState,
+        setGameState,
         addPlayer,
         removePlayer,
         updatePlayer,
@@ -109,6 +181,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
         addReminder,
         removeReminder,
         resetGame,
+        setPlayerCount,
+        addSelectedCharacter,
+        removeSelectedCharacter,
+        clearSelectedCharacters,
+        setDrunkImpersonation,
       }}
     >
       {children}

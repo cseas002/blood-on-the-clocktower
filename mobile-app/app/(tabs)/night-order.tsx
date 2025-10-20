@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a2e',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#666',
+    borderColor: '#667',
   },
   phaseButtonActive: {
     backgroundColor: '#16213e',
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
   },
   emptyStateSubtext: {
     fontSize: 14,
-    color: '#666',
+    color: '#667',
     textAlign: 'center',
     paddingHorizontal: 40,
   },
