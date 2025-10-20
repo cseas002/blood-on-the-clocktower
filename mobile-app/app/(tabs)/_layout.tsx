@@ -28,6 +28,9 @@ export default function TabsLayout() {
           fontWeight: '600',
           marginTop: 2,
         },
+        // Enable swipe gestures
+        swipeEnabled: true,
+        lazy: false,
       }}
     >
       <Tabs.Screen

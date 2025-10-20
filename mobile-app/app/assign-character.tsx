@@ -1,8 +1,9 @@
 import { StyleSheet, View, TouchableOpacity, Text, Modal, Image, Dimensions, TextInput, Keyboard, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { useGame } from "../context/GameContext";
 import { Colors } from "../constants/Colors";
+import { Character } from "../types/game";
 
 const { width, height } = Dimensions.get('window');
 
@@ -18,8 +19,16 @@ export default function TokenSelectionScreen() {
   // Track assignments to apply them all at once
   const assignmentsRef = useRef<Map<string, any>>(new Map());
 
-  // Use the characters that were selected in the character selection screen
-  const gameCharacters = gameState.selectedCharacters;
+  // Randomize the character order once when the component mounts
+  const gameCharacters = useMemo(() => {
+    const characters = [...gameState.selectedCharacters];
+    // Fisher-Yates shuffle algorithm
+    for (let i = characters.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [characters[i], characters[j]] = [characters[j], characters[i]];
+    }
+    return characters;
+  }, []);
 
   const handleTokenPress = (tokenNumber: number) => {
     if (selectedTokens.includes(tokenNumber)) {
@@ -50,8 +59,8 @@ export default function TokenSelectionScreen() {
       return;
     }
 
-    // Store the character to assign
-    const characterToAssign = gameCharacters[characterIndex];
+    // Store the character to assign (actual character, not what we show)
+    const actualCharacter = gameCharacters[characterIndex];
     const nameToAdd = playerName.trim();
 
     // Add to selected tokens
@@ -62,7 +71,7 @@ export default function TokenSelectionScreen() {
     addPlayer(nameToAdd);
 
     // Store the assignment to be applied later
-    assignmentsRef.current.set(nameToAdd, characterToAssign);
+    assignmentsRef.current.set(nameToAdd, actualCharacter);
 
     // Check if all tokens are selected
     if (newSelectedTokens.length >= gameCharacters.length) {
@@ -83,7 +92,13 @@ export default function TokenSelectionScreen() {
       assignments.forEach(([playerName, character]) => {
         const player = gameState.players.find(p => p.name === playerName);
         if (player && !player.character) {
-          assignCharacter(player.id, character);
+          // If the character is a Drunk, pass the impersonated townsfolk
+          if (character.id === 'drunk') {
+            const impersonatedCharacter = gameState.drunkImpersonations['drunk'];
+            assignCharacter(player.id, character, impersonatedCharacter);
+          } else {
+            assignCharacter(player.id, character);
+          }
         }
       });
 
@@ -92,9 +107,9 @@ export default function TokenSelectionScreen() {
     } catch (error) {
       console.error('Error in handleContinue:', error);
       // Fallback navigation even if there's an error
-      router.replace("/(tabs)/");
+      router.replace("/(tabs)");
     }
-  }, [gameState.players, assignCharacter, router]);
+  }, [gameState.players, gameState.drunkImpersonations, assignCharacter, router]);
 
   // Calculate positions for circular layout
   const getTokenPosition = (index: number, total: number) => {
@@ -117,7 +132,15 @@ export default function TokenSelectionScreen() {
     };
   };
 
-  const currentCharacter = currentToken ? gameCharacters[currentToken - 1] : null;
+  // Get the character to display - if it's a Drunk, show the impersonated townsfolk instead
+  const currentCharacter = currentToken ? (() => {
+    const actualCharacter = gameCharacters[currentToken - 1];
+    if (actualCharacter?.id === 'drunk') {
+      const impersonatedCharacter = gameState.drunkImpersonations['drunk'];
+      return impersonatedCharacter || actualCharacter;
+    }
+    return actualCharacter;
+  })() : null;
 
   return (
     <View style={styles.container}>

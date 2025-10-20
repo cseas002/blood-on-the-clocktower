@@ -2,9 +2,32 @@ import { StyleSheet, View, TouchableOpacity, Text } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
 import { Colors } from "../constants/Colors";
+import { useGame } from "../context/GameContext";
+import { troubleBrewingCharacters } from "../data/characters";
+
+const DEV_MODE = true; // Set to false in production
 
 export default function Index() {
   const router = useRouter();
+  const { quickSetup } = useGame();
+
+  // Dev mode: Quick setup with random 8 characters and players
+  const quickDevSetup = () => {
+    // Randomly select 8 characters
+    const shuffled = [...troubleBrewingCharacters].sort(() => Math.random() - 0.5);
+    const selected = shuffled.slice(0, 8);
+
+    // Create 8 random player names
+    const playerNames = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry'];
+
+    // Setup everything atomically
+    quickSetup(selected, playerNames);
+
+    // Navigate to grimoire
+    setTimeout(() => {
+      router.push("/(tabs)");
+    }, 100);
+  };
 
   return (
     <View style={styles.container}>
@@ -35,6 +58,17 @@ export default function Index() {
           <Text style={styles.roleButtonText}>Player</Text>
           <Text style={styles.roleButtonSubtext}>Join a game</Text>
         </TouchableOpacity>
+
+        {/* Dev Mode Quick Setup */}
+        {DEV_MODE && (
+          <TouchableOpacity
+            style={styles.devButton}
+            onPress={quickDevSetup}
+          >
+            <Text style={styles.devButtonText}>⚡ Quick Setup (Dev)</Text>
+            <Text style={styles.devButtonSubtext}>Skip to grimoire with 8 random characters</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -97,5 +131,27 @@ const styles = StyleSheet.create({
   roleButtonSubtext: {
     fontSize: 16,
     color: Colors.textSecondary,
+  },
+  devButton: {
+    backgroundColor: '#4ecca3',
+    borderRadius: 15,
+    padding: 25,
+    marginTop: 30,
+    width: '100%',
+    maxWidth: 300,
+    borderWidth: 2,
+    borderColor: '#3dbb91',
+    alignItems: 'center',
+  },
+  devButtonText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000000',
+    marginBottom: 6,
+  },
+  devButtonSubtext: {
+    fontSize: 13,
+    color: '#1a1a1a',
+    textAlign: 'center',
   },
 });

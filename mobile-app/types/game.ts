@@ -28,6 +28,7 @@ export interface Player {
   isVoteless: boolean;
   hasUsedDeadVote: boolean;
   reminders: Reminder[];
+  reminderTokens: ReminderToken[]; // Small visual tokens from characters (Washerwoman, Poisoner, etc.)
   notes: string;
   drunkImpersonation?: Character; // For drunk characters, which townsfolk they think they are
 }
@@ -36,6 +37,13 @@ export interface Reminder {
   id: string;
   text: string;
   character?: string;
+}
+
+export interface ReminderToken {
+  id: string;
+  text: string; // e.g., "Townsfolk", "Wrong", "Poisoned", "Protected"
+  characterId: string; // Which character placed this token
+  characterIcon?: any; // Optional: icon of the character for visual reference
 }
 
 export interface GameState {
