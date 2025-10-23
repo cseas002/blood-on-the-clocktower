@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Colors } from '../../constants/Colors';
-import { Text, StyleSheet, Pressable } from 'react-native';
+import { Text, View, StyleSheet } from 'react-native';
 
 export default function TabsLayout() {
   return (
@@ -23,86 +23,54 @@ export default function TabsLayout() {
         tabBarActiveTintColor: '#e94560',
         tabBarInactiveTintColor: '#666666',
         tabBarShowLabel: false,
+        tabBarItemStyle: {
+          borderRightWidth: 1,
+          borderRightColor: '#333333',
+        },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Grimoire',
-          tabBarIcon: () => <Text style={styles.icon}>🏠</Text>,
-          tabBarButton: (props) => {
-            const { style, ...restProps } = props;
-            return (
-              <Pressable
-                {...(restProps as any)}
-                style={[
-                  style,
-                  { borderRightWidth: 1, borderRightColor: '#333333' },
-                  props.accessibilityState?.selected && { backgroundColor: '#e94560' }
-                ]}
-              />
-            );
-          },
+          tabBarIcon: ({ focused }) => (
+            <View style={[styles.iconContainer, focused && styles.activeTab]}>
+              <Text style={styles.icon}>🏠</Text>
+            </View>
+          ),
         }}
       />
       <Tabs.Screen
         name="characters"
         options={{
           title: 'Characters',
-          tabBarIcon: () => <Text style={styles.icon}>📖</Text>,
-          tabBarButton: (props) => {
-            const { style, ...restProps } = props;
-            return (
-              <Pressable
-                {...(restProps as any)}
-                style={[
-                  style,
-                  { borderRightWidth: 1, borderRightColor: '#333333' },
-                  props.accessibilityState?.selected && { backgroundColor: '#e94560' }
-                ]}
-              />
-            );
-          },
+          tabBarIcon: ({ focused }) => (
+            <View style={[styles.iconContainer, focused && styles.activeTab]}>
+              <Text style={styles.icon}>📖</Text>
+            </View>
+          ),
         }}
       />
       <Tabs.Screen
         name="night-order"
         options={{
           title: 'Night Order',
-          tabBarIcon: () => <Text style={styles.icon}>🌙</Text>,
-          tabBarButton: (props) => {
-            const { style, ...restProps } = props;
-            return (
-              <Pressable
-                {...(restProps as any)}
-                style={[
-                  style,
-                  { borderRightWidth: 1, borderRightColor: '#333333' },
-                  props.accessibilityState?.selected && { backgroundColor: '#e94560' }
-                ]}
-              />
-            );
-          },
+          tabBarIcon: ({ focused }) => (
+            <View style={[styles.iconContainer, focused && styles.activeTab]}>
+              <Text style={styles.icon}>🌙</Text>
+            </View>
+          ),
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: () => <Text style={styles.icon}>⚙️</Text>,
-          tabBarButton: (props) => {
-            const { style, ...restProps } = props;
-            return (
-              <Pressable
-                {...(restProps as any)}
-                style={[
-                  style,
-                  { borderRightWidth: 0 },
-                  props.accessibilityState?.selected && { backgroundColor: '#e94560' }
-                ]}
-              />
-            );
-          },
+          tabBarIcon: ({ focused }) => (
+            <View style={[styles.iconContainer, styles.lastIcon, focused && styles.activeTab]}>
+              <Text style={styles.icon}>⚙️</Text>
+            </View>
+          ),
         }}
       />
     </Tabs>
@@ -110,7 +78,26 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
+  iconContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 0,
+    gap: 5,
+  },
+  lastIcon: {
+    borderRightWidth: 0,
+  },
   icon: {
     fontSize: 30,
+    marginBottom: -10,
+  },
+  activeTab: {
+    transform: [{ scale: 1.1 }],
+  },
+  activeIndicator: {
+    width: 35,
+    height: 1,
+    backgroundColor: '#e94560',
+    borderRadius: 2,
   },
 });

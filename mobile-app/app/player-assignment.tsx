@@ -111,11 +111,14 @@ export default function PlayerAssignmentScreen() {
                                             onPress={() => !assignedPlayer && unassignedPlayers.length > 0 && handleAssignPlayer({
                                                 id: character.id,
                                                 name: character.name,
+                                                playerNumber: 0, // This will be properly assigned when the player is created
                                                 character,
                                                 isDead: false,
+                                                deathType: null,
                                                 isVoteless: false,
                                                 hasUsedDeadVote: false,
                                                 reminders: [],
+                                                reminderTokens: [],
                                                 notes: '',
                                             })}
                                         >

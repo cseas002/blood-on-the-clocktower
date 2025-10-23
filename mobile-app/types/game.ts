@@ -20,11 +20,15 @@ export interface Character {
   setup?: boolean;
 }
 
+export type DeathType = 'executed' | 'assassinated' | null;
+
 export interface Player {
   id: string;
   name: string;
+  playerNumber: number; // Sequential player number (1, 2, 3, etc.)
   character?: Character;
   isDead: boolean;
+  deathType: DeathType; // How the player died
   isVoteless: boolean;
   hasUsedDeadVote: boolean;
   reminders: Reminder[];
@@ -46,12 +50,16 @@ export interface ReminderToken {
   characterIcon?: any; // Optional: icon of the character for visual reference
 }
 
+export type GamePhase = 'not-started' | 'setup' | 'first-night' | 'day' | 'night' | 'ended';
+
 export interface GameState {
   players: Player[];
   edition: Edition;
   demonBluffs: Character[];
   isNight: boolean;
   currentNightStep: number;
+  nightNumber: number; // Track which night it is (1, 2, 3, etc.)
+  gamePhase: GamePhase;
   selectedCharacters: Character[];
   playerCount: number;
   characterDistribution: {

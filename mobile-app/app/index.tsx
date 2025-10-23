@@ -13,9 +13,44 @@ export default function Index() {
 
   // Dev mode: Quick setup with random 8 characters and players
   const quickDevSetup = () => {
-    // Randomly select 8 characters
-    const shuffled = [...troubleBrewingCharacters].sort(() => Math.random() - 0.5);
-    const selected = shuffled.slice(0, 8);
+    const playerCount = 8;
+
+    // Character distribution for 8 players: 5 townsfolk, 1 outsider, 1 minion, 1 demon
+    // If Baron is picked, add 2 more outsiders (reducing townsfolk by 2)
+
+    // Separate characters by team
+    const townsfolk = troubleBrewingCharacters.filter(c => c.team === 'townsfolk');
+    const outsiders = troubleBrewingCharacters.filter(c => c.team === 'outsider');
+    const minions = troubleBrewingCharacters.filter(c => c.team === 'minion');
+    const demons = troubleBrewingCharacters.filter(c => c.team === 'demon');
+
+    // Randomly pick 1 demon
+    const selectedDemon = demons[Math.floor(Math.random() * demons.length)];
+
+    // Randomly pick 1 minion
+    const selectedMinion = minions[Math.floor(Math.random() * minions.length)];
+
+    // Check if Baron is selected
+    const isBaron = selectedMinion.id === 'baron';
+
+    // Calculate how many of each type we need
+    let townsfolkCount = isBaron ? 3 : 5; // 5 normally, 3 if Baron
+    let outsiderCount = isBaron ? 3 : 1;  // 1 normally, 3 if Baron (drunk + 2 others)
+
+    // Always include Drunk as one of the outsiders
+    const drunk = outsiders.find(c => c.id === 'drunk')!;
+    const otherOutsiders = outsiders.filter(c => c.id !== 'drunk');
+
+    // Randomly select remaining outsiders
+    const shuffledOtherOutsiders = [...otherOutsiders].sort(() => Math.random() - 0.5);
+    const selectedOutsiders = [drunk, ...shuffledOtherOutsiders.slice(0, outsiderCount - 1)];
+
+    // Randomly select townsfolk
+    const shuffledTownsfolk = [...townsfolk].sort(() => Math.random() - 0.5);
+    const selectedTownsfolk = shuffledTownsfolk.slice(0, townsfolkCount);
+
+    // Combine all selected characters
+    const selected = [...selectedTownsfolk, ...selectedOutsiders, selectedMinion, selectedDemon];
 
     // Create 8 random player names
     const playerNames = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank', 'Grace', 'Henry'];

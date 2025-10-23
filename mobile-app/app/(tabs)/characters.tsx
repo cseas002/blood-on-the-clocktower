@@ -1,14 +1,19 @@
-import { StyleSheet, View, ScrollView, TouchableOpacity, Text, TextInput, Image } from "react-native";
+import { StyleSheet, View, ScrollView, TouchableOpacity, Text, TextInput, Image, Modal, Pressable, Dimensions } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useState, useMemo } from "react";
 import { troubleBrewingCharacters } from "../../data/characters";
 import { Character, Team } from "../../types/game";
 import { Colors, TEAM_COLORS } from "../../constants/Colors";
+import { useGame } from "../../context/GameContext";
+
+const { width } = Dimensions.get('window');
 
 export default function CharactersScreen() {
+  const { gameState } = useGame();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTeam, setSelectedTeam] = useState<Team | 'all'>('all');
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
+  const [showTokenView, setShowTokenView] = useState(false);
 
   const filteredCharacters = useMemo(() => {
     let chars = troubleBrewingCharacters;
@@ -28,6 +33,21 @@ export default function CharactersScreen() {
 
   const handleSelectCharacter = (character: Character) => {
     setSelectedCharacter(selectedCharacter?.id === character.id ? null : character);
+  };
+
+  const isCharacterInPlay = (characterId: string) => {
+    // Check if character is directly in play
+    return gameState.selectedCharacters.some(c => c.id === characterId);
+  };
+
+  const isDrunkImpersonation = (characterId: string) => {
+    // Check if this character is being impersonated by the drunk
+    const drunkInPlay = gameState.selectedCharacters.find(c => c.id === 'drunk');
+    if (drunkInPlay) {
+      const drunkImpersonation = gameState.drunkImpersonations[drunkInPlay.id];
+      return drunkImpersonation?.id === characterId;
+    }
+    return false;
   };
 
   const teamCounts = useMemo(() => {
@@ -98,28 +118,43 @@ export default function CharactersScreen() {
 
       {/* Character List */}
       <ScrollView style={styles.characterList} contentContainerStyle={styles.characterListContent}>
-        {filteredCharacters.map(character => (
-          <TouchableOpacity
-            key={character.id}
-            style={[
-              styles.characterCard,
-              { borderLeftColor: TEAM_COLORS[character.team] },
-              selectedCharacter?.id === character.id && styles.characterCardSelected
-            ]}
-            onPress={() => handleSelectCharacter(character)}
-          >
-            <View style={styles.characterHeader}>
-              <Image source={character.icon} style={styles.characterIcon} />
-              <Text style={styles.characterName}>{character.name}</Text>
-              <View style={[
-                styles.teamBadge,
-                { backgroundColor: TEAM_COLORS[character.team] }
-              ]}>
-                <Text style={styles.teamBadgeText}>
-                  {character.team.charAt(0).toUpperCase()}
-                </Text>
+        {filteredCharacters.map(character => {
+          const inPlay = isCharacterInPlay(character.id);
+          const asDrunk = isDrunkImpersonation(character.id);
+          return (
+            <TouchableOpacity
+              key={character.id}
+              style={[
+                styles.characterCard,
+                { borderLeftColor: TEAM_COLORS[character.team] },
+                selectedCharacter?.id === character.id && styles.characterCardSelected,
+                inPlay && styles.characterCardInPlay,
+                asDrunk && styles.characterCardAsDrunk
+              ]}
+              onPress={() => handleSelectCharacter(character)}
+            >
+              <View style={styles.characterHeader}>
+                <Image source={character.icon} style={styles.characterIcon} />
+                <Text style={styles.characterName}>{character.name}</Text>
+                {inPlay && !asDrunk && (
+                  <View style={styles.inPlayBadge}>
+                    <Text style={styles.inPlayBadgeText}>IN PLAY</Text>
+                  </View>
+                )}
+                {asDrunk && (
+                  <View style={styles.asDrunkBadge}>
+                    <Text style={styles.asDrunkBadgeText}>AS DRUNK</Text>
+                  </View>
+                )}
+                <View style={[
+                  styles.teamBadge,
+                  { backgroundColor: TEAM_COLORS[character.team] }
+                ]}>
+                  <Text style={styles.teamBadgeText}>
+                    {character.team.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
               </View>
-            </View>
             <Text style={styles.characterAbility}>{character.ability}</Text>
             {selectedCharacter?.id === character.id && (
               <>
@@ -153,11 +188,41 @@ export default function CharactersScreen() {
                     </View>
                   </View>
                 )}
+                <TouchableOpacity
+                  style={styles.viewTokenButton}
+                  onPress={() => setShowTokenView(true)}
+                >
+                  <Text style={styles.viewTokenButtonText}>View Token</Text>
+                </TouchableOpacity>
               </>
             )}
           </TouchableOpacity>
-        ))}
+          );
+        })}
       </ScrollView>
+
+      {/* Token View Modal - Full Screen Character Token */}
+      <Modal
+        visible={showTokenView}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTokenView(false)}
+      >
+        <Pressable
+          style={styles.tokenViewOverlay}
+          onPress={() => setShowTokenView(false)}
+        >
+          <View style={styles.tokenViewContainer}>
+            {selectedCharacter && (
+              <Image
+                source={selectedCharacter.token}
+                style={styles.tokenViewImage}
+                resizeMode="contain"
+              />
+            )}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -244,11 +309,42 @@ const styles = StyleSheet.create({
   characterCardSelected: {
     backgroundColor: Colors.surfaceLight,
   },
+  characterCardInPlay: {
+    borderLeftWidth: 6,
+    backgroundColor: 'rgba(78, 204, 163, 0.1)',
+  },
+  characterCardAsDrunk: {
+    borderLeftWidth: 6,
+    backgroundColor: 'rgba(255, 165, 2, 0.1)',
+    borderLeftColor: '#ffa502',
+  },
   characterHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
     gap: 12,
+  },
+  inPlayBadge: {
+    backgroundColor: '#4ecca3',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  inPlayBadgeText: {
+    color: '#000000',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  asDrunkBadge: {
+    backgroundColor: '#ffa502',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  asDrunkBadgeText: {
+    color: '#000000',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   characterIcon: {
     width: 40,
@@ -322,5 +418,34 @@ const styles = StyleSheet.create({
     color: Colors.accent,
     fontSize: 11,
     fontWeight: '600',
+  },
+  viewTokenButton: {
+    backgroundColor: '#4ecca3',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    marginTop: 15,
+    alignItems: 'center',
+  },
+  viewTokenButtonText: {
+    color: '#000000',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  tokenViewOverlay: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tokenViewContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tokenViewImage: {
+    width: width * 0.8,
+    height: width * 0.8,
+    maxWidth: 400,
+    maxHeight: 400,
   },
 });

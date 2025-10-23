@@ -12,7 +12,7 @@ export const troubleBrewingCharacters: Character[] = [
     icon: require('../assets/images/characters/icons/washerwoman.webp'),
     token: require('../assets/images/characters/tokens/washerwoman.webp'),
     firstNightReminder: 'Show the character token of a Townsfolk in play. Point to two players, one of which is that character.',
-    firstNightOrder: 1,
+    firstNightOrder: 8,
     reminders: ['Townsfolk', 'Wrong'],
   },
   {
@@ -62,7 +62,7 @@ export const troubleBrewingCharacters: Character[] = [
     firstNightReminder: 'Show the finger signal (0, 1, 2) for the number of evil alive neighbours.',
     otherNightReminder: 'Show the finger signal (0, 1, 2) for the number of evil alive neighbours.',
     firstNightOrder: 5,
-    otherNightOrder: 1,
+    otherNightOrder: 7,
     reminders: [],
   },
   {
@@ -73,8 +73,8 @@ export const troubleBrewingCharacters: Character[] = [
     ability: 'Each night, choose 2 players: you learn if either is a Demon. There is a good player that registers as a Demon to you.',
     icon: require('../assets/images/characters/icons/fortuneteller.webp'),
     token: require('../assets/images/characters/tokens/fortuneteller.webp'),
-    firstNightReminder: 'The Fortune Teller points to two players. Give a head signal (nod yes, shake no) for whether one of them is the Demon. Wake the Demon and show them the Red Herring token.',
-    otherNightReminder: 'The Fortune Teller points to two players. Show a head signal (nod yes, shake no) for whether one of them is the Demon.',
+    firstNightReminder: 'The Fortune Teller points to two players. Give a head signal (nod yes, shake no) for whether one of them is the Demon. There is a good player that registers as a Demon to you.',
+    otherNightReminder: 'The Fortune Teller points to two players. Show a head signal (nod yes, shake no) for whether one of them is the Demon. There is a good player that registers as a Demon to you.',
     firstNightOrder: 6,
     otherNightOrder: 2,
     reminders: ['Red Herring'],
@@ -214,8 +214,8 @@ export const troubleBrewingCharacters: Character[] = [
     token: require('../assets/images/characters/tokens/poisoner.webp'),
     firstNightReminder: 'The Poisoner points to a player. That player is poisoned.',
     otherNightReminder: 'The Poisoner points to a player. That player is poisoned.',
-    firstNightOrder: 8,
-    otherNightOrder: 7,
+    firstNightOrder: 1,
+    otherNightOrder: 2,
     reminders: ['Poisoned'],
   },
   {
@@ -264,7 +264,7 @@ export const troubleBrewingCharacters: Character[] = [
     icon: require('../assets/images/characters/icons/imp.webp'),
     token: require('../assets/images/characters/tokens/imp.webp'),
     otherNightReminder: 'The Imp points to a player. That player dies.',
-    otherNightOrder: 9,
+    otherNightOrder: 1,
     reminders: ['Dead'],
   },
 ];
