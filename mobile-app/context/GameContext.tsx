@@ -40,7 +40,7 @@ interface GameContextType {
   reorderPlayers: (fromIndex: number, toIndex: number) => void;
   reorderCharacters: (fromIndex: number, toIndex: number) => void;
   setDemonBluffs: (bluffs: Character[]) => void;
-  autoPickDemonBluffs: () => void;
+  autoPickDemonBluffs: () => Character[];
   setGamePhase: (phase: GamePhase) => void;
   startGame: () => void;
   advanceNight: () => void;
@@ -377,6 +377,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
 
     setDemonBluffs(bluffs);
+    return bluffs;
   };
 
   const setGamePhase = (phase: GamePhase) => {

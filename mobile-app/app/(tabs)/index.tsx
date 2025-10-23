@@ -28,7 +28,9 @@ export default function GrimoireScreen() {
   const [draggedPlayer, setDraggedPlayer] = useState<Player | null>(null);
   const [draggedPlayerIndex, setDraggedPlayerIndex] = useState<number | null>(null);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
+  const [setupStep, setSetupStep] = useState<'bluffs' | 'fortune-teller'>('bluffs');
   const [selectedBluffs, setSelectedBluffs] = useState<Character[]>([]);
+  const [fortuneTellerRedHerring, setFortuneTellerRedHerring] = useState<Player | null>(null);
   const [showBluffsModal, setShowBluffsModal] = useState(false);
   const [editingBluffs, setEditingBluffs] = useState<Character[]>([]);
   const [tokenSetupMode, setTokenSetupMode] = useState(false);
@@ -36,6 +38,7 @@ export default function GrimoireScreen() {
   const [tokenSetupSelections, setTokenSetupSelections] = useState<Player[]>([]);
   const [nightFlowActive, setNightFlowActive] = useState(false);
   const [currentNightStep, setCurrentNightStep] = useState(0);
+  const [currentNightNumber, setCurrentNightNumber] = useState(1); // Track which night (1, 2, 3, etc.)
   const [showDemonBluffsInNight, setShowDemonBluffsInNight] = useState(false);
   const [showDemonTokenInNight, setShowDemonTokenInNight] = useState(false);
 
@@ -45,6 +48,7 @@ export default function GrimoireScreen() {
     if (tokenSetupMode) {
       // If no character is selected yet, start setup for this player's character
       if (!currentTokenSetupCharacter && player.character) {
+        // Always use the player's character (which is already the impersonated character for drunk players)
         startCharacterTokenSetup(player.character);
       } else {
         // Otherwise, handle token setup selection (tap other players to assign tokens)
@@ -74,14 +78,32 @@ export default function GrimoireScreen() {
   };
 
   const startSetup = () => {
-    // Open demon bluffs setup only
+    // Open setup wizard - starts with demon bluffs
     setShowSetupWizard(true);
+    setSetupStep('bluffs');
     setSelectedBluffs([]);
+    setFortuneTellerRedHerring(null);
   };
 
   const startCharacterTokenSetup = (character: Character) => {
     // Start setup for a specific character
     if (character.reminders && character.reminders.length > 0) {
+      // Special case: Virgin automatically adds token to themselves
+      if (character.id === 'virgin') {
+        const playerWithChar = getPlayerWithCharacter(character.id);
+        if (playerWithChar) {
+          const token: ReminderToken = {
+            id: Date.now().toString(),
+            text: character.reminders[0],
+            characterId: character.id,
+            characterIcon: character.icon,
+          };
+          addReminderToken(playerWithChar.id, token);
+          // Don't enter token setup mode - just add the token and exit
+          return;
+        }
+      }
+
       setTokenSetupMode(true);
       setCurrentTokenSetupCharacter(character);
       setTokenSetupSelections([]);
@@ -95,8 +117,8 @@ export default function GrimoireScreen() {
   };
 
   const handleAutoPickBluffs = () => {
-    autoPickDemonBluffs();
-    setSelectedBluffs(gameState.demonBluffs);
+    const bluffs = autoPickDemonBluffs();
+    setSelectedBluffs(bluffs);
   };
 
   const handleManualBluffSelection = (character: Character) => {
@@ -122,6 +144,35 @@ export default function GrimoireScreen() {
 
   const completeBluffsSelection = () => {
     setDemonBluffs(selectedBluffs);
+
+    // Check if Fortune Teller is in the game
+    const hasFortuneTeller = gameState.selectedCharacters.some(c => c.id === 'fortuneteller');
+
+    if (hasFortuneTeller) {
+      // Move to Fortune Teller setup
+      setSetupStep('fortune-teller');
+    } else {
+      // Complete setup
+      setShowSetupWizard(false);
+    }
+  };
+
+  const completeFortuneTellerSetup = () => {
+    // Add Red Herring token to selected player
+    if (fortuneTellerRedHerring) {
+      const fortuneTellerChar = troubleBrewingCharacters.find(c => c.id === 'fortuneteller');
+      if (fortuneTellerChar) {
+        const token: ReminderToken = {
+          id: Date.now().toString(),
+          text: 'Red Herring',
+          characterId: 'fortuneteller',
+          characterIcon: fortuneTellerChar.icon,
+        };
+        addReminderToken(fortuneTellerRedHerring.id, token);
+      }
+    }
+
+    // Complete setup
     setShowSetupWizard(false);
   };
 
@@ -130,9 +181,10 @@ export default function GrimoireScreen() {
   };
 
   const isPlayerDrunkOrPoisoned = (player: Player) => {
-    if (player.character?.id === 'drunk') return true;
-    // Check if player has poisoned token
-    return player.reminderTokens.some(token => token.text.toLowerCase() === 'poisoned');
+    // Check if player has drunk or poisoned token
+    return player.reminderTokens.some(token =>
+      token.text.toLowerCase() === 'drunk' || token.text.toLowerCase() === 'poisoned'
+    );
   };
 
   const handleTokenSetupPlayerTap = (player: Player) => {
@@ -182,6 +234,18 @@ export default function GrimoireScreen() {
             return;
           }
         }
+      } else if (currentTokenSetupCharacter.id === 'fortuneteller') {
+        // Fortune Teller Red Herring must be a good player (townsfolk or outsider)
+        if (player.character?.team !== 'townsfolk' && player.character?.team !== 'outsider') {
+          alert('Red Herring must be a good player (Townsfolk or Outsider)!');
+          return;
+        }
+      } else if (currentTokenSetupCharacter.id === 'poisoner' || currentTokenSetupCharacter.team === 'minion') {
+        // Minions cannot target the demon
+        if (player.character?.team === 'demon') {
+          alert('Cannot select the Demon!');
+          return;
+        }
       }
     }
 
@@ -190,6 +254,17 @@ export default function GrimoireScreen() {
 
     // Auto-place token and move to next if complete
     if (tokenSetupSelections.length + 1 === maxSelections) {
+      // Remove all existing tokens from this character before placing new ones
+      // This ensures limited tokens (like Butler's "Master") replace the old selection
+      gameState.players.forEach(p => {
+        const existingTokens = p.reminderTokens.filter(t =>
+          t.characterId === currentTokenSetupCharacter.id
+        );
+        existingTokens.forEach(token => {
+          removeReminderToken(p.id, token.id);
+        });
+      });
+
       // Place all tokens
       const allSelections = [...tokenSetupSelections, player];
       allSelections.forEach((selectedPlayer, index) => {
@@ -364,8 +439,17 @@ export default function GrimoireScreen() {
   // Calculate sequential night order positions for characters in play
   const getNightOrderPosition = (character: Character, isFirstNight: boolean) => {
     // Get all characters in play that have the relevant night order
-    const charactersWithOrder = gameState.selectedCharacters
+    // For drunk characters, use their impersonated character
+    const charactersForOrder = gameState.selectedCharacters.map(c => {
+      const isDrunk = c.id === 'drunk';
+      return isDrunk && gameState.drunkImpersonations[c.id]
+        ? gameState.drunkImpersonations[c.id]
+        : c;
+    });
+
+    const charactersWithOrder = charactersForOrder
       .filter(c => {
+        if (!c) return false;
         const orderValue = isFirstNight ? c.firstNightOrder : c.otherNightOrder;
         return orderValue !== undefined;
       })
@@ -378,6 +462,40 @@ export default function GrimoireScreen() {
     // Find the position of this character in the sorted list
     const position = charactersWithOrder.findIndex(c => c.id === character.id);
     return position !== -1 ? position + 1 : null;
+  };
+
+  // Build other night steps (night 2+)
+  const getOtherNightSteps = () => {
+    const steps: Array<{ type: string; text: string; character?: Character; action?: string }> = [];
+
+    // Step 1: Tell everyone to sleep
+    steps.push({ type: 'instruction', text: 'Tell everyone to close their eyes and go to sleep.' });
+
+    // Step 2+: Night order characters (using otherNightOrder)
+    // For drunk characters, use impersonated character instead
+    const charactersForNightOrder = gameState.selectedCharacters.map(character => {
+      const isDrunk = character.id === 'drunk';
+      return isDrunk && gameState.drunkImpersonations[character.id]
+        ? gameState.drunkImpersonations[character.id]
+        : character;
+    });
+
+    const nightOrderCharacters = charactersForNightOrder
+      .filter(c => c && c.otherNightOrder !== undefined)
+      .sort((a, b) => (a.otherNightOrder || 999) - (b.otherNightOrder || 999));
+
+    nightOrderCharacters.forEach(character => {
+      if (character) {
+        steps.push({
+          type: 'night-action',
+          text: `Wake up the ${character.name}. ${character.otherNightReminder || character.ability || ''}`,
+          character: character,
+          action: 'add-reminder'
+        });
+      }
+    });
+
+    return steps;
   };
 
   // Build first night steps
@@ -412,18 +530,27 @@ export default function GrimoireScreen() {
     steps.push({ type: 'instruction', text: 'Put the Minions and Demon to sleep.' });
 
     // Step 5+: Night order characters
-    const nightOrderCharacters = gameState.selectedCharacters
-      .filter(c => c.firstNightOrder !== undefined)
+    // For drunk characters, use impersonated character instead
+    const charactersForNightOrder = gameState.selectedCharacters.map(character => {
+      const isDrunk = character.id === 'drunk';
+      return isDrunk && gameState.drunkImpersonations[character.id]
+        ? gameState.drunkImpersonations[character.id]
+        : character;
+    });
+
+    const nightOrderCharacters = charactersForNightOrder
+      .filter(c => c && c.firstNightOrder !== undefined)
       .sort((a, b) => (a.firstNightOrder || 999) - (b.firstNightOrder || 999));
 
     nightOrderCharacters.forEach(character => {
-      const playerWithChar = gameState.players.find(p => p.character?.id === character.id);
-      steps.push({
-        type: 'night-action',
-        text: `Wake up the ${character.name}. ${character.ability || ''}`,
-        character: character,
-        action: 'add-reminder'
-      });
+      if (character) {
+        steps.push({
+          type: 'night-action',
+          text: `Wake up the ${character.name}. ${character.ability || ''}`,
+          character: character,
+          action: 'add-reminder'
+        });
+      }
     });
 
     return steps;
@@ -432,10 +559,17 @@ export default function GrimoireScreen() {
   const handleStartNightFlow = () => {
     setNightFlowActive(true);
     setCurrentNightStep(0);
+    setCurrentNightNumber(1); // Start at night 1
+  };
+
+  const handleContinueToNextNight = () => {
+    setNightFlowActive(true);
+    setCurrentNightStep(0);
+    setCurrentNightNumber(currentNightNumber + 1);
   };
 
   const nextNightStep = () => {
-    const steps = getFirstNightSteps();
+    const steps = currentNightNumber === 1 ? getFirstNightSteps() : getOtherNightSteps();
     if (currentNightStep < steps.length - 1) {
       setCurrentNightStep(currentNightStep + 1);
     } else {
@@ -580,35 +714,6 @@ export default function GrimoireScreen() {
           </View>
         ) : (
           <View style={styles.circleContainer}>
-            {/* Start Game Button - Center of Circle (hide when night flow is active) */}
-            {!nightFlowActive && (() => {
-              const hasDemon = gameState.selectedCharacters.some(c => c.team === 'demon');
-              const hasBluffs = gameState.demonBluffs.length === 3;
-              const canStartGame = hasDemon && hasBluffs;
-
-              return (
-                <View style={styles.startGameButtonContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.startGameButton,
-                      !canStartGame && styles.startGameButtonDisabled
-                    ]}
-                    onPress={() => {
-                      if (canStartGame) {
-                        handleStartNightFlow();
-                      }
-                    }}
-                    disabled={!canStartGame}
-                  >
-                    <Text style={styles.startGameButtonText}>Start Game</Text>
-                  </TouchableOpacity>
-                  {hasDemon && !hasBluffs && (
-                    <Text style={styles.startGameHint}>Setup demon's bluffs first</Text>
-                  )}
-                </View>
-              );
-            })()}
-
             {/* Display selected characters in the order they appear, showing assigned players */}
             {gameState.selectedCharacters.map((character, index) => {
               // Find the player assigned to this character
@@ -623,9 +728,9 @@ export default function GrimoireScreen() {
               // For drunk, show the impersonated character instead
               const displayCharacter = isDrunk && drunkImpersonation ? drunkImpersonation : character;
 
-              // For night order badges, use the actual character (not drunk impersonation)
-              // because drunk doesn't wake up at night
-              const nightOrderCharacter = character;
+              // For night order badges, show impersonated character for drunk
+              // This makes the drunk appear as if they are the impersonated character
+              const nightOrderCharacter = displayCharacter;
 
               const totalCharacters = gameState.selectedCharacters.length;
               const position = getCirclePosition(index, totalCharacters);
@@ -641,8 +746,8 @@ export default function GrimoireScreen() {
                     }
                   ]}
                 >
-                  {/* Night Order Badges - only show if toggle is enabled and NOT drunk */}
-                  {showNightOrderNumbers && !isDrunk && nightOrderCharacter.otherNightOrder && (
+                  {/* Night Order Badges - show impersonated character's order for drunk */}
+                  {showNightOrderNumbers && nightOrderCharacter.otherNightOrder && (
                     <TouchableOpacity
                       style={[styles.nightOrderBadge, styles.otherNightBadge]}
                       onPress={() => setNightOrderModalData({ character: nightOrderCharacter, isFirstNight: false })}
@@ -650,7 +755,7 @@ export default function GrimoireScreen() {
                       <Text style={styles.nightOrderText}>{getNightOrderPosition(nightOrderCharacter, false)}</Text>
                     </TouchableOpacity>
                   )}
-                  {showNightOrderNumbers && !isDrunk && nightOrderCharacter.firstNightOrder && (
+                  {showNightOrderNumbers && nightOrderCharacter.firstNightOrder && (
                     <TouchableOpacity
                       style={[styles.nightOrderBadge, styles.firstNightBadge]}
                       onPress={() => setNightOrderModalData({ character: nightOrderCharacter, isFirstNight: true })}
@@ -676,10 +781,28 @@ export default function GrimoireScreen() {
                         tokenSetupMode && assignedPlayer && tokenSetupSelections.some(p => p.id === assignedPlayer.id) && styles.characterTokenSelected,
                         // Highlight current character in token setup mode
                         tokenSetupMode && currentTokenSetupCharacter?.id === character.id && styles.characterTokenSetupActive,
+                        // Gray out demon when minion is setting up tokens
+                        tokenSetupMode && currentTokenSetupCharacter?.team === 'minion' && character.team === 'demon' && styles.characterTokenDisabled,
+                        // Gray out evil players when Fortune Teller is setting up tokens (unless drunk)
+                        (() => {
+                          if (!tokenSetupMode || currentTokenSetupCharacter?.id !== 'fortuneteller') return false;
+                          const ftPlayer = getPlayerWithCharacter('fortuneteller');
+                          if (!ftPlayer) return false;
+                          const ftIsDrunkOrPoisoned = isPlayerDrunkOrPoisoned(ftPlayer);
+                          // If drunk/poisoned, no restrictions (can select anyone)
+                          if (ftIsDrunkOrPoisoned) return false;
+                          // If NOT drunk/poisoned, can only select good players
+                          return character.team !== 'townsfolk' && character.team !== 'outsider';
+                        })() && styles.characterTokenDisabled,
                       ]}
                       onPress={() => {
                         // In setup mode, can't select the character doing the setup
                         if (setupMode && currentSetupCharacter?.id === character.id) {
+                          return;
+                        }
+                        // In token setup mode, allow pressing if there's an assigned player
+                        if (tokenSetupMode && assignedPlayer) {
+                          handlePlayerPress(assignedPlayer, index);
                           return;
                         }
                         // Only allow interaction if there's an assigned player
@@ -692,7 +815,21 @@ export default function GrimoireScreen() {
                           handlePlayerLongPress(assignedPlayer, index);
                         }
                       }}
-                      disabled={!assignedPlayer || (setupMode && currentSetupCharacter?.id === character.id)}
+                      disabled={
+                        !assignedPlayer ||
+                        (setupMode && currentSetupCharacter?.id === character.id) ||
+                        (tokenSetupMode && currentTokenSetupCharacter?.team === 'minion' && character.team === 'demon') ||
+                        (() => {
+                          if (!tokenSetupMode || currentTokenSetupCharacter?.id !== 'fortuneteller') return false;
+                          const ftPlayer = getPlayerWithCharacter('fortuneteller');
+                          if (!ftPlayer) return false;
+                          const ftIsDrunkOrPoisoned = isPlayerDrunkOrPoisoned(ftPlayer);
+                          // If drunk/poisoned, no restrictions (can select anyone)
+                          if (ftIsDrunkOrPoisoned) return false;
+                          // If NOT drunk/poisoned, can only select good players
+                          return character.team !== 'townsfolk' && character.team !== 'outsider';
+                        })()
+                      }
                     >
                       {/* Character token (full token image) */}
                       <Image
@@ -757,7 +894,14 @@ export default function GrimoireScreen() {
                           >
                             <TouchableOpacity
                               style={styles.reminderTokenAbsolute}
-                              onLongPress={() => removeReminderToken(assignedPlayer.id, token.id)}
+                              onLongPress={() => {
+                                // Prevent removing drunk token
+                                if (token.characterId === 'drunk' || token.text.toLowerCase() === 'drunk') {
+                                  alert('Cannot remove the Drunk token!');
+                                  return;
+                                }
+                                removeReminderToken(assignedPlayer.id, token.id);
+                              }}
                             >
                               <View style={styles.reminderTokenContent}>
                                 {token.characterIcon && (
@@ -769,7 +913,7 @@ export default function GrimoireScreen() {
                                 )}
                               </View>
                             </TouchableOpacity>
-                            <Text style={styles.reminderTokenLabel} numberOfLines={1}>
+                            <Text style={styles.reminderTokenLabel}>
                               {token.text}
                             </Text>
                           </View>
@@ -782,6 +926,46 @@ export default function GrimoireScreen() {
             })}
           </View>
         )}
+
+        {/* Start Game / Continue to Night x Button - Below Circle (hide when night flow is active) */}
+        {gameState.selectedCharacters.length > 0 && !nightFlowActive && (() => {
+          const hasDemon = gameState.selectedCharacters.some(c => c.team === 'demon');
+          const hasBluffs = gameState.demonBluffs.length === 3;
+          const hasFortuneTeller = gameState.selectedCharacters.some(c => c.id === 'fortuneteller');
+          const hasRedHerring = hasFortuneTeller
+            ? gameState.players.some(p => p.reminderTokens.some(t => t.text === 'Red Herring' && t.characterId === 'fortuneteller'))
+            : true; // If no Fortune Teller, this check passes
+          const canStartGame = hasDemon && hasBluffs && hasRedHerring;
+          const isFirstNight = currentNightNumber === 1;
+
+          return (
+            <View style={styles.startGameButtonContainerBelow}>
+              <TouchableOpacity
+                style={[
+                  styles.startGameButton,
+                  (isFirstNight && !canStartGame) && styles.startGameButtonDisabled
+                ]}
+                onPress={() => {
+                  if (isFirstNight) {
+                    if (canStartGame) {
+                      handleStartNightFlow();
+                    }
+                  } else {
+                    handleContinueToNextNight();
+                  }
+                }}
+                disabled={isFirstNight && !canStartGame}
+              >
+                <Text style={styles.startGameButtonText}>
+                  {isFirstNight ? 'Start Game' : `Continue to Night ${currentNightNumber}`}
+                </Text>
+              </TouchableOpacity>
+              {hasDemon && !hasBluffs && (
+                <Text style={styles.startGameHint}>Setup demon's bluffs first</Text>
+              )}
+            </View>
+          );
+        })()}
       </View>
 
       {/* Setup Mode Character Info Overlay */}
@@ -824,7 +1008,7 @@ export default function GrimoireScreen() {
             style={styles.setupButton}
             onPress={startSetup}
           >
-            <Text style={styles.setupButtonText}>Setup Bluffs</Text>
+            <Text style={styles.setupButtonText}>Setup</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -872,6 +1056,17 @@ export default function GrimoireScreen() {
             >
               <Text style={styles.compactActionText}>View Token</Text>
             </TouchableOpacity>
+            {selectedPlayerForActions?.character?.id === 'drunk' && (
+              <TouchableOpacity
+                style={styles.compactActionButton}
+                onPress={() => {
+                  setShowPlayerActions(false);
+                  setShowDrunkTokenView(true);
+                }}
+              >
+                <Text style={styles.compactActionText}>View Drunk Token</Text>
+              </TouchableOpacity>
+            )}
             {selectedPlayerForActions?.character?.team === 'demon' && (
               <TouchableOpacity
                 style={styles.compactActionButton}
@@ -884,20 +1079,24 @@ export default function GrimoireScreen() {
                 <Text style={styles.compactActionText}>Show Bluffs</Text>
               </TouchableOpacity>
             )}
-            {selectedPlayerForActions?.character?.reminders &&
-             selectedPlayerForActions.character.reminders.length > 0 && (
-              <TouchableOpacity
-                style={styles.compactActionButton}
-                onPress={() => {
-                  setShowPlayerActions(false);
-                  if (selectedPlayerForActions?.character) {
-                    startCharacterTokenSetup(selectedPlayerForActions.character);
-                  }
-                }}
-              >
-                <Text style={styles.compactActionText}>Setup Tokens</Text>
-              </TouchableOpacity>
-            )}
+            {(() => {
+              // Always use the player's character (which is already the impersonated character for drunk)
+              const characterToCheck = selectedPlayerForActions?.character;
+
+              return characterToCheck?.reminders && characterToCheck.reminders.length > 0 && (
+                <TouchableOpacity
+                  style={styles.compactActionButton}
+                  onPress={() => {
+                    setShowPlayerActions(false);
+                    if (characterToCheck) {
+                      startCharacterTokenSetup(characterToCheck);
+                    }
+                  }}
+                >
+                  <Text style={styles.compactActionText}>Setup Tokens</Text>
+                </TouchableOpacity>
+              );
+            })()}
             <TouchableOpacity
               style={styles.compactActionButton}
               onPress={() => {
@@ -908,7 +1107,7 @@ export default function GrimoireScreen() {
                 }
               }}
             >
-              <Text style={styles.compactActionText}>Add Reminder</Text>
+              <Text style={styles.compactActionText}>Reminders</Text>
             </TouchableOpacity>
             {selectedPlayerForActions?.isDead ? (
               <TouchableOpacity
@@ -959,13 +1158,53 @@ export default function GrimoireScreen() {
           }}
         >
           <View style={styles.tokenViewContainer}>
-            {selectedPlayerForActions?.character && (
-              <Image
-                source={selectedPlayerForActions.character.token}
-                style={styles.tokenViewImage}
-                resizeMode="contain"
-              />
-            )}
+            {selectedPlayerForActions?.character && (() => {
+              // For drunk players, show the impersonated character's token
+              const isDrunk = selectedPlayerForActions.character.id === 'drunk';
+              const displayToken = isDrunk && selectedPlayerForActions.drunkImpersonation
+                ? selectedPlayerForActions.drunkImpersonation.token
+                : selectedPlayerForActions.character.token;
+
+              return (
+                <Image
+                  source={displayToken}
+                  style={styles.tokenViewImage}
+                  resizeMode="contain"
+                />
+              );
+            })()}
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Drunk Token View Modal - Shows actual drunk token */}
+      <Modal
+        visible={showDrunkTokenView}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowDrunkTokenView(false);
+          setSelectedPlayerForActions(null);
+        }}
+      >
+        <Pressable
+          style={styles.tokenViewOverlay}
+          onPress={() => {
+            setShowDrunkTokenView(false);
+            setSelectedPlayerForActions(null);
+          }}
+        >
+          <View style={styles.tokenViewContainer}>
+            {selectedPlayerForActions?.character?.id === 'drunk' && (() => {
+              const drunkCharacter = troubleBrewingCharacters.find(c => c.id === 'drunk');
+              return drunkCharacter ? (
+                <Image
+                  source={drunkCharacter.token}
+                  style={styles.tokenViewImage}
+                  resizeMode="contain"
+                />
+              ) : null;
+            })()}
           </View>
         </Pressable>
       </Modal>
@@ -989,10 +1228,46 @@ export default function GrimoireScreen() {
         >
           <Pressable style={styles.reminderSelectorContent} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.modalTitle}>
-              Add Reminder to {selectedPlayerForReminder?.name}
+              Reminders - {selectedPlayerForReminder?.name}
             </Text>
+
+            {/* Existing Reminders */}
+            {selectedPlayerForReminder && selectedPlayerForReminder.reminderTokens.length > 0 && (
+              <View style={styles.existingRemindersSection}>
+                <Text style={styles.reminderSelectorSubtitle}>Current Reminders:</Text>
+                {selectedPlayerForReminder.reminderTokens.map((token) => (
+                  <View key={token.id} style={styles.existingReminderRow}>
+                    <Image
+                      source={token.characterIcon}
+                      style={styles.reminderTokenSelectorIcon}
+                      resizeMode="contain"
+                    />
+                    <View style={styles.reminderTokenSelectorTextContainer}>
+                      <Text style={styles.reminderTokenSelectorText}>{token.text}</Text>
+                      <Text style={styles.reminderTokenSelectorCharacter}>
+                        {gameState.selectedCharacters.find(c => c.id === token.characterId)?.name || 'Custom'}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.removeReminderButton}
+                      onPress={() => {
+                        if (token.characterId === 'drunk' || token.text.toLowerCase() === 'drunk') {
+                          alert('Cannot remove the Drunk token!');
+                          return;
+                        }
+                        removeReminderToken(selectedPlayerForReminder.id, token.id);
+                      }}
+                    >
+                      <Text style={styles.removeReminderButtonText}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Add New Reminder */}
             <Text style={styles.reminderSelectorSubtitle}>
-              Select a reminder token
+              {selectedPlayerForReminder && selectedPlayerForReminder.reminderTokens.length > 0 ? 'Add More:' : 'Select a reminder token:'}
             </Text>
             <ScrollView style={styles.reminderTokenList} contentContainerStyle={styles.reminderTokenListContent}>
               {getAvailableReminderTokens().map((token, idx) => (
@@ -1216,7 +1491,7 @@ export default function GrimoireScreen() {
         </Pressable>
       </Modal>
 
-      {/* Setup Wizard Modal - Demon Bluffs */}
+      {/* Setup Wizard Modal - Demon Bluffs & Fortune Teller */}
       <Modal
         visible={showSetupWizard}
         transparent
@@ -1225,82 +1500,173 @@ export default function GrimoireScreen() {
       >
         <View style={styles.setupWizardOverlay}>
           <View style={styles.setupWizardContent}>
-            <Text style={styles.setupWizardTitle}>Demon Bluffs</Text>
-            <Text style={styles.setupWizardSubtitle}>
-              Select 3 good characters NOT in play for the Demon to bluff as
-            </Text>
-            <Text style={styles.setupWizardHint}>
-              Recommended: 2 Townsfolk + 1 Outsider
-            </Text>
+            {setupStep === 'bluffs' ? (
+              <>
+                <Text style={styles.setupWizardTitle}>Demon Bluffs</Text>
+                <Text style={styles.setupWizardSubtitle}>
+                  Select 3 good characters NOT in play for the Demon to bluff as
+                </Text>
+                <Text style={styles.setupWizardHint}>
+                  Recommended: 2 Townsfolk + 1 Outsider
+                </Text>
 
-            <View style={styles.setupWizardButtons}>
-              <TouchableOpacity
-                style={styles.autoPickButton}
-                onPress={handleAutoPickBluffs}
-              >
-                <Text style={styles.autoPickButtonText}>Auto Pick (2T + 1O)</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.bluffsList} contentContainerStyle={styles.bluffsListContent}>
-              {troubleBrewingCharacters
-                .filter(c =>
-                  (c.team === 'townsfolk' || c.team === 'outsider') &&
-                  !gameState.selectedCharacters.some(sc => sc.id === c.id)
-                )
-                .map(character => (
+                <View style={styles.setupWizardButtons}>
                   <TouchableOpacity
-                    key={character.id}
-                    style={[
-                      styles.bluffCard,
-                      selectedBluffs.some(b => b.id === character.id) && styles.bluffCardSelected
-                    ]}
-                    onPress={() => handleManualBluffSelection(character)}
+                    style={styles.autoPickButton}
+                    onPress={handleAutoPickBluffs}
                   >
-                    <Image source={character.icon} style={styles.bluffIcon} />
-                    <Text style={styles.bluffName}>{character.name}</Text>
-                    <View style={[
-                      styles.bluffTeamBadge,
-                      { backgroundColor: TEAM_COLORS[character.team] }
-                    ]}>
-                      <Text style={styles.bluffTeamText}>{character.team[0].toUpperCase()}</Text>
-                    </View>
+                    <Text style={styles.autoPickButtonText}>Auto Pick (2T + 1O)</Text>
                   </TouchableOpacity>
-                ))}
-            </ScrollView>
+                </View>
 
-            <View style={styles.selectedBluffsContainer}>
-              <Text style={styles.selectedBluffsLabel}>
-                Selected: {selectedBluffs.length}/3
-              </Text>
-              <View style={styles.selectedBluffsList}>
-                {selectedBluffs.map(bluff => (
-                  <View key={bluff.id} style={styles.selectedBluffChip}>
-                    <Text style={styles.selectedBluffText}>{bluff.name}</Text>
+                <ScrollView style={styles.bluffsList} contentContainerStyle={styles.bluffsListContent}>
+                  {troubleBrewingCharacters
+                    .filter(c =>
+                      (c.team === 'townsfolk' || c.team === 'outsider') &&
+                      !gameState.selectedCharacters.some(sc => sc.id === c.id)
+                    )
+                    .map(character => (
+                      <TouchableOpacity
+                        key={character.id}
+                        style={[
+                          styles.bluffCard,
+                          selectedBluffs.some(b => b.id === character.id) && styles.bluffCardSelected
+                        ]}
+                        onPress={() => handleManualBluffSelection(character)}
+                      >
+                        <Image source={character.icon} style={styles.bluffIcon} />
+                        <Text style={styles.bluffName}>{character.name}</Text>
+                        <View style={[
+                          styles.bluffTeamBadge,
+                          { backgroundColor: TEAM_COLORS[character.team] }
+                        ]}>
+                          <Text style={styles.bluffTeamText}>{character.team[0].toUpperCase()}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                </ScrollView>
+
+                <View style={styles.selectedBluffsContainer}>
+                  <Text style={styles.selectedBluffsLabel}>
+                    Selected: {selectedBluffs.length}/3
+                  </Text>
+                  <View style={styles.selectedBluffsList}>
+                    {selectedBluffs.map(bluff => (
+                      <View key={bluff.id} style={styles.selectedBluffChip}>
+                        <Text style={styles.selectedBluffText}>{bluff.name}</Text>
+                      </View>
+                    ))}
                   </View>
-                ))}
-              </View>
-            </View>
+                </View>
 
-            <View style={styles.setupWizardFooter}>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={() => setShowSetupWizard(false)}
-              >
-                <Text style={styles.buttonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.button,
-                  styles.assignButton,
-                  selectedBluffs.length !== 3 && styles.buttonDisabled
-                ]}
-                onPress={completeBluffsSelection}
-                disabled={selectedBluffs.length !== 3}
-              >
-                <Text style={styles.buttonText}>Next</Text>
-              </TouchableOpacity>
-            </View>
+                <View style={styles.setupWizardFooter}>
+                  <TouchableOpacity
+                    style={[styles.button, styles.cancelButton]}
+                    onPress={() => setShowSetupWizard(false)}
+                  >
+                    <Text style={styles.buttonText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.button,
+                      styles.assignButton,
+                      selectedBluffs.length !== 3 && styles.buttonDisabled
+                    ]}
+                    onPress={completeBluffsSelection}
+                    disabled={selectedBluffs.length !== 3}
+                  >
+                    <Text style={styles.buttonText}>Next</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                {/* Fortune Teller Setup */}
+                <Text style={styles.setupWizardTitle}>Fortune Teller Setup</Text>
+                <Text style={styles.setupWizardSubtitle}>
+                  Select which player registers as a Demon to the Fortune Teller
+                </Text>
+                {(() => {
+                  // Check if Fortune Teller is drunk/poisoned
+                  const fortuneTeller = gameState.players.find(p => p.character?.id === 'fortuneteller');
+                  const isDrunk = fortuneTeller ? isPlayerDrunkOrPoisoned(fortuneTeller) : false;
+
+                  return (
+                    <Text style={styles.setupWizardHint}>
+                      {isDrunk
+                        ? 'The Fortune Teller is drunk/poisoned - can select any player'
+                        : 'Must select a good player (Townsfolk or Outsider)'}
+                    </Text>
+                  );
+                })()}
+
+                <ScrollView style={styles.bluffsList} contentContainerStyle={styles.bluffsListContent}>
+                  {gameState.players.map(player => {
+                    if (!player.character) return null;
+
+                    // Check if Fortune Teller is drunk/poisoned
+                    const fortuneTeller = gameState.players.find(p => p.character?.id === 'fortuneteller');
+                    const isDrunk = fortuneTeller ? isPlayerDrunkOrPoisoned(fortuneTeller) : false;
+
+                    // If not drunk, only allow good players
+                    const isGood = player.character.team === 'townsfolk' || player.character.team === 'outsider';
+                    const canSelect = isDrunk || isGood;
+
+                    return (
+                      <TouchableOpacity
+                        key={player.id}
+                        style={[
+                          styles.bluffCard,
+                          fortuneTellerRedHerring?.id === player.id && styles.bluffCardSelected,
+                          !canSelect && styles.bluffCardDisabled
+                        ]}
+                        onPress={() => {
+                          if (canSelect) {
+                            setFortuneTellerRedHerring(player);
+                          }
+                        }}
+                        disabled={!canSelect}
+                      >
+                        <Image source={player.character.icon} style={styles.bluffIcon} />
+                        <Text style={styles.bluffName}>{player.name}</Text>
+                        <View style={[
+                          styles.bluffTeamBadge,
+                          { backgroundColor: TEAM_COLORS[player.character.team] }
+                        ]}>
+                          <Text style={styles.bluffTeamText}>{player.character.team[0].toUpperCase()}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+
+                <View style={styles.selectedBluffsContainer}>
+                  <Text style={styles.selectedBluffsLabel}>
+                    Selected: {fortuneTellerRedHerring ? fortuneTellerRedHerring.name : 'None'}
+                  </Text>
+                </View>
+
+                <View style={styles.setupWizardFooter}>
+                  <TouchableOpacity
+                    style={[styles.button, styles.cancelButton]}
+                    onPress={() => setSetupStep('bluffs')}
+                  >
+                    <Text style={styles.buttonText}>Back</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.button,
+                      styles.assignButton,
+                      !fortuneTellerRedHerring && styles.buttonDisabled
+                    ]}
+                    onPress={completeFortuneTellerSetup}
+                    disabled={!fortuneTellerRedHerring}
+                  >
+                    <Text style={styles.buttonText}>Complete</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -1388,8 +1754,8 @@ export default function GrimoireScreen() {
 
       {/* Token Setup Overlay - Shows instructions at top, tap tokens to select */}
       {tokenSetupMode && (
-        <View style={styles.tokenSetupOverlay}>
-          <View style={styles.tokenSetupInstructionBox}>
+        <View style={styles.tokenSetupOverlay} pointerEvents="box-none">
+          <View style={styles.tokenSetupInstructionBox} pointerEvents="auto">
             {currentTokenSetupCharacter ? (
               (() => {
                 const playerWithChar = getPlayerWithCharacter(currentTokenSetupCharacter.id);
@@ -1414,28 +1780,61 @@ export default function GrimoireScreen() {
                       </TouchableOpacity>
                     </View>
 
-                    <Text style={styles.tokenSetupInstruction}>
-                      Tap {maxSelections - tokenSetupSelections.length} more player{maxSelections - tokenSetupSelections.length !== 1 ? 's' : ''}:
-                      {currentTokenSetupCharacter.reminders?.map((reminder, idx) => (
-                        <Text key={idx} style={[
-                          styles.tokenSetupReminderText,
-                          idx < tokenSetupSelections.length && styles.tokenSetupReminderComplete
-                        ]}>
-                          {' '}{idx + 1}. "{reminder}"{idx < tokenSetupSelections.length ? ' ✓' : ''}
-                        </Text>
-                      ))}
-                    </Text>
+                    {(() => {
+                      // Find all players who currently have tokens from this character
+                      const playersWithTokens = gameState.players.filter(p =>
+                        p.reminderTokens.some(t => t.characterId === currentTokenSetupCharacter.id)
+                      );
 
-                    {tokenSetupSelections.length > 0 && (
-                      <View style={styles.tokenSetupSelectedContainer}>
-                        <Text style={styles.tokenSetupSelectedLabel}>Selected:</Text>
-                        {tokenSetupSelections.map((player, idx) => (
-                          <Text key={player.id} style={styles.tokenSetupSelectedPlayer}>
-                            {idx + 1}. {player.name}
+                      return (
+                        <>
+                          <Text style={styles.tokenSetupInstruction}>
+                            Tap {maxSelections - tokenSetupSelections.length} more player{maxSelections - tokenSetupSelections.length !== 1 ? 's' : ''}:
+                            {currentTokenSetupCharacter.reminders?.map((reminder, idx) => (
+                              <Text key={idx} style={[
+                                styles.tokenSetupReminderText,
+                                idx < tokenSetupSelections.length && styles.tokenSetupReminderComplete
+                              ]}>
+                                {' '}{idx + 1}. "{reminder}"{idx < tokenSetupSelections.length ? ' ✓' : ''}
+                              </Text>
+                            ))}
                           </Text>
-                        ))}
-                      </View>
-                    )}
+
+                          {playersWithTokens.length > 0 && (
+                            <View style={styles.tokenSetupExistingContainer}>
+                              <Text style={styles.tokenSetupExistingLabel}>Currently Placed:</Text>
+                              {playersWithTokens.map((player) => {
+                                const tokens = player.reminderTokens.filter(t => t.characterId === currentTokenSetupCharacter.id);
+                                return tokens.map(token => (
+                                  <View key={token.id} style={styles.tokenSetupExistingRow}>
+                                    <Text style={styles.tokenSetupExistingPlayer}>
+                                      {player.name} - "{token.text}"
+                                    </Text>
+                                    <TouchableOpacity
+                                      style={styles.tokenSetupRemoveButton}
+                                      onPress={() => removeReminderToken(player.id, token.id)}
+                                    >
+                                      <Text style={styles.tokenSetupRemoveText}>Remove</Text>
+                                    </TouchableOpacity>
+                                  </View>
+                                ));
+                              })}
+                            </View>
+                          )}
+
+                          {tokenSetupSelections.length > 0 && (
+                            <View style={styles.tokenSetupSelectedContainer}>
+                              <Text style={styles.tokenSetupSelectedLabel}>Selected:</Text>
+                              {tokenSetupSelections.map((player, idx) => (
+                                <Text key={player.id} style={styles.tokenSetupSelectedPlayer}>
+                                  {idx + 1}. {player.name}
+                                </Text>
+                              ))}
+                            </View>
+                          )}
+                        </>
+                      );
+                    })()}
                   </>
                 );
               })()
@@ -1459,8 +1858,8 @@ export default function GrimoireScreen() {
       )}
 
       {/* Night Flow Overlay */}
-      {nightFlowActive && (() => {
-        const steps = getFirstNightSteps();
+      {nightFlowActive && !tokenSetupMode && (() => {
+        const steps = currentNightNumber === 1 ? getFirstNightSteps() : getOtherNightSteps();
         const currentStep = steps[currentNightStep];
         const demon = gameState.selectedCharacters.find(c => c.team === 'demon');
         const demonPlayer = gameState.players.find(p => p.character?.team === 'demon');
@@ -1471,7 +1870,7 @@ export default function GrimoireScreen() {
               {/* Step indicator and close button */}
               <View style={styles.nightFlowHeader}>
                 <Text style={styles.nightFlowStepIndicator}>
-                  Step {currentNightStep + 1} of {steps.length}
+                  Night {currentNightNumber} - Step {currentNightStep + 1} of {steps.length}
                 </Text>
                 <TouchableOpacity
                   style={styles.nightFlowCloseButton}
@@ -1512,7 +1911,7 @@ export default function GrimoireScreen() {
                     }
                   }}
                 >
-                  <Text style={styles.nightFlowActionButtonText}>Add Reminder Tokens</Text>
+                  <Text style={styles.nightFlowActionButtonText}>Reminder Tokens</Text>
                 </TouchableOpacity>
               )}
 
@@ -1782,7 +2181,7 @@ const styles = StyleSheet.create({
   },
   circleContainer: {
     width: width,
-    height: height - 250,
+    height: height - 300,
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2278,8 +2677,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
     backgroundColor: '#000000',
     paddingHorizontal: 4,
-    paddingVertical: 1,
+    paddingVertical: 2,
     borderRadius: 3,
+    maxWidth: 60,
+    flexWrap: 'wrap',
   },
   reminderSelectorContent: {
     backgroundColor: '#2d2d2d',
@@ -2294,6 +2695,34 @@ const styles = StyleSheet.create({
     color: '#cccccc',
     textAlign: 'center',
     marginBottom: 15,
+  },
+  existingRemindersSection: {
+    marginBottom: 15,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3d3d3d',
+  },
+  existingReminderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2d2d2d',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#4d4d4d',
+  },
+  removeReminderButton: {
+    backgroundColor: 'rgba(255, 0, 0, 0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 10,
+  },
+  removeReminderButtonText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: 'bold',
   },
   reminderTokenList: {
     maxHeight: 400,
@@ -2510,6 +2939,10 @@ const styles = StyleSheet.create({
   bluffCardSelected: {
     borderColor: '#4ecca3',
     backgroundColor: 'rgba(78, 204, 163, 0.2)',
+  },
+  bluffCardDisabled: {
+    opacity: 0.4,
+    borderColor: '#2d2d2d',
   },
   bluffIcon: {
     width: 40,
@@ -2743,7 +3176,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 1000,
-    pointerEvents: 'none',
   },
   tokenSetupInstructionBox: {
     backgroundColor: 'rgba(233, 69, 96, 0.95)',
@@ -2753,7 +3185,6 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 15,
     borderBottomWidth: 3,
     borderBottomColor: '#ffffff',
-    pointerEvents: 'auto',
   },
   tokenSetupHeader: {
     flexDirection: 'row',
@@ -2820,6 +3251,43 @@ const styles = StyleSheet.create({
     color: '#4ecca3',
     textDecorationLine: 'line-through',
   },
+  tokenSetupExistingContainer: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  tokenSetupExistingLabel: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: 5,
+  },
+  tokenSetupExistingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingVertical: 4,
+  },
+  tokenSetupExistingPlayer: {
+    fontSize: 13,
+    color: '#ffd700',
+    fontWeight: '600',
+    flex: 1,
+  },
+  tokenSetupRemoveButton: {
+    backgroundColor: 'rgba(255, 0, 0, 0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 10,
+  },
+  tokenSetupRemoveText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
   tokenSetupSelectedContainer: {
     marginTop: 10,
     paddingTop: 10,
@@ -2852,6 +3320,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 50,
+  },
+  startGameButtonContainerBelow: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   startGameButton: {
     paddingHorizontal: 30,
